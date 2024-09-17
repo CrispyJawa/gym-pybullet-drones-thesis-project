@@ -44,7 +44,7 @@ if __name__ == "__main__":
         description='Helix flight script using CtrlAviary or VisionAviary and DSLPIDControl')
     parser.add_argument('--drone', default="cf2x", type=DroneModel, help='Drone model (default: CF2X)', metavar='',
                         choices=DroneModel)
-    parser.add_argument('--num_drones', default=4, type=int, help='Number of drones (default: 3)', metavar='')
+    parser.add_argument('--num_drones', default=8, type=int, help='Number of drones (default: 3)', metavar='')
     parser.add_argument('--physics', default="pyb", type=Physics, help='Physics updates (default: PYB)', metavar='',
                         choices=Physics)
     parser.add_argument('--vision', default=False, type=str2bool, help='Whether to use VisionAviary (default: False)',
@@ -75,9 +75,9 @@ if __name__ == "__main__":
     H_GOAL = 2
     R = 0.5
     # Initialised positions based on number of drones
-    INIT_XYZS = np.array([[R * i, 0, H] for i in range(
-        ARGS.num_drones)])  #np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), R*np.sin((i/6)*2*np.pi+np.pi/2), H] for i in range(ARGS.num_drones)])
-    #Aggregation of physics steps (not used by default)
+    INIT_XYZS = np.array([[R * (i % 4), R * (i // 4), H] for i in range(ARGS.num_drones)])
+    # np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), R*np.sin((i/6)*2*np.pi+np.pi/2), H] for i in range(ARGS.num_drones)])
+    # Aggregation of physics steps (not used by default)
     AGGR_PHY_STEPS = int(ARGS.simulation_freq_hz / ARGS.control_freq_hz) if ARGS.aggregate else 1
 
     #### Create the environment with or without video capture ## Create sim window here
@@ -132,7 +132,7 @@ if __name__ == "__main__":
                     )
 
     #### Create graph ##########################
-    edges = (0, 3), (0, 1), (2, 3)
+    edges = (0, 1), (1, 2), (0, 3), (0, 7), (1, 6), (2, 5), (3, 4), (4, 5)
     swarm = g.Graph(edges, ARGS.num_drones, 0)
     delay_register = np.zeros(swarm.get_size(), float)
 
@@ -159,39 +159,66 @@ if __name__ == "__main__":
         #### Compute control at the desired frequency ##############
         if i % CTRL_EVERY_N_STEPS == 0:  # ie every five steps. At default, this is every ~20ms
             print("--20ms--")
-            # This part is likely to be the one to get modified for swarm control messaging. WP iterator increases here
+            # reset delay register
+            delay_register.fill(0)
 
+            # This part is likely to be the one to get modified for swarm control messaging. WP iterator increases here
+            connections = swarm.find_ultimate_links(swarm.get_head())  # find connections in dictionary starting from head
             # Check connectivity status
-            for j in range(ARGS.num_drones):  # for each drone
-                # find its neighbours
-                neighbours = swarm.get_neighbours(j)
-                # find distance between them
-                drone1 = env.pos[j]
-                for k in neighbours:
-                    if k > j:  # If we've already visited that drone, (j > k) we don't need to test connection twice
-                        # find drone positions
-                        drone2 = env.pos[k]
-                        # pythag theorem to find straight line between them
-                        side_x = drone1[0] - drone2[0]
-                        side_y = drone1[1] - drone2[1]
-                        side_z = drone1[2] - drone2[2]
+            for node in connections:  # find connection distance and delay for indexed node
+                print(node)
+                last_item = swarm.get_head()
+                for path_item in connections[node]:
+                    if path_item != swarm.get_head():
+                        drone1 = last_item
+                        drone2 = path_item
+                        print("    ", drone1, "->", drone2)
+                        pos1 = env.pos[drone1]
+                        pos2 = env.pos[drone2]
+                        side_x = pos1[0] - pos2[0]
+                        side_y = pos1[1] - pos2[1]
+                        side_z = pos1[2] - pos2[2]
                         distance = np.sqrt(side_x**2 + side_y**2 + side_z**2)
-                        print("Distance between drone ", j, " and drone ", k, ": ", distance)
-                        # check connectivity to each one
-                        if not Utils.check_connected(distance, L_s=gaussian_roll(3.0, 1.0),
-                                                     L_misc=gaussian_roll(1.0, 0.5)):
-                            # Link broken, remove edge
-                            print("Link broken, drone ", j, " and ", k, " disconnected")
-                            swarm.delete_edge(j, k)
-                        # calc delay to send along this line
-                        Utils.find_delay(distance, processing=gaussian_roll(0.020, 0.005))
-                        # Insert into table (numdrones x numdrones with link delays in each cell)
-                        # Change find ultimate links so it makes a tuple of all nodes it visits in order
+                        print("    Distance between drone ", drone1, " and drone ", drone2, ": ", distance)
+                        found_delay = Utils.find_delay(distance, processing=Utils.gaussian_roll(0.025, 0.01))
+                        # add and record delays
+                        delay_register[node] = delay_register[node]+found_delay
+                    last_item = path_item
+            print(delay_register)
+            #TODO: Apply delays to the wp_counters
+
+
+
+            # for j in range(ARGS.num_drones):  # for each drone
+            #     # find its neighbours
+            #     neighbours = swarm.get_neighbours(j)
+            #     # find distance between them
+            #     drone1 = env.pos[j]
+            #     for k in neighbours:
+            #         if k > j:  # If we've already visited that drone, (j > k) we don't need to test connection twice
+            #             # find drone positions
+            #             drone2 = env.pos[k]
+            #             # pythag theorem to find straight line between them
+            #             side_x = drone1[0] - drone2[0]
+            #             side_y = drone1[1] - drone2[1]
+            #             side_z = drone1[2] - drone2[2]
+            #             distance = np.sqrt(side_x**2 + side_y**2 + side_z**2)
+            #             print("Distance between drone ", j, " and drone ", k, ": ", distance)
+            #             # check connectivity to each one
+            #             if not Utils.check_connected(distance, L_s=gaussian_roll(3.0, 1.0),
+            #                                          L_misc=gaussian_roll(1.0, 0.5)):
+            #                 # Link broken, remove edge
+            #                 print("Link broken, drone ", j, " and ", k, " disconnected")
+            #                 swarm.delete_edge(j, k)
+            #             # calc delay to send along this line
+            #             Utils.find_delay(distance, processing=gaussian_roll(0.020, 0.005))
+            #             # Insert into table (numdrones x numdrones with link delays in each cell)
+            #             # Change find ultimate links so it makes a tuple of all nodes it visits in order
 
 
 
             # get the connectivity table indicating how far away everything is from each other
-            connections = swarm.find_ultimate_links(swarm.get_head(), np.zeros(swarm.SIZE,int))
+
                 # Ping every drone, print how long it took for last drone to receive
             # print(connections)
             # Change so that the CH receives the first command, then in order across the swarm the rest
