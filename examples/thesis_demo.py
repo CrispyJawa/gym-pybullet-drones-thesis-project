@@ -65,7 +65,7 @@ if __name__ == "__main__":
                         metavar='')
     parser.add_argument('--control_freq_hz', default=48, type=int, help='Control frequency in Hz (default: 48)',
                         metavar='')
-    parser.add_argument('--duration_sec', default=5, type=int,
+    parser.add_argument('--duration_sec', default=20, type=int,
                         help='Duration of the simulation in seconds (default: 5)', metavar='')
     ARGS = parser.parse_args()
 
@@ -74,11 +74,13 @@ if __name__ == "__main__":
     H_STEP = 0.02
     H_GOAL = 2
     R = 0.5
+    R_STEP = 0.02
+    R_GOAL = 50.0
     # Initialised positions based on number of drones
     INIT_XYZS = np.array([[R * (i % 4), R * (i // 4), H] for i in range(ARGS.num_drones)])
     # np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), R*np.sin((i/6)*2*np.pi+np.pi/2), H] for i in range(ARGS.num_drones)])
     # Aggregation of physics steps (not used by default)
-    AGGR_PHY_STEPS = int(ARGS.simulation_freq_hz / ARGS.control_freq_hz) if ARGS.aggregate else 1
+    AGGR_PHY_STEPS = int(ARGS.simulation_freq_hz / ARGS.control_freq_hz) if ARGS.aggregate else 1  # default 1
 
     #### Create the environment with or without video capture ## Create sim window here
     if ARGS.vision:
@@ -118,9 +120,9 @@ if __name__ == "__main__":
         height = i * H_STEP
         if height > H_GOAL:
             height = H_GOAL
-        TARGET_POS[i, :] = (INIT_XYZS[0, 0],
-                            INIT_XYZS[0, 1],
-                            height)
+            TARGET_POS[i, :] = (INIT_XYZS[0, 0],
+                                INIT_XYZS[0, 1],
+                                height)
     wp_counters = np.array([0 for i in
                             range(ARGS.num_drones)])  # value for each drone indicating pos in circle
     print("WP Counters: ", wp_counters)
@@ -147,7 +149,7 @@ if __name__ == "__main__":
               range(ARGS.num_drones)}  #each drone given a goal position array spot
     START = time.time()
     for i in range(0, int(ARGS.duration_sec * env.SIM_FREQ),
-                   AGGR_PHY_STEPS):  #loops through for duration * frequency iterations
+                   AGGR_PHY_STEPS):  #loops through for duration * frequency iterations (1200 at default (240*5)) (step = 0.0041667 ms)
 
         #### Make it rain rubber ducks #############################
         # (part of original code, but contains useful instructions for events occuring at a given time)
@@ -157,37 +159,53 @@ if __name__ == "__main__":
         obs, reward, done, info = env.step(action)
 
         #### Compute control at the desired frequency ##############
-        if i % CTRL_EVERY_N_STEPS == 0:  # ie every five steps. At default, this is every ~20ms
-            print("--20ms--")
+        if i % CTRL_EVERY_N_STEPS == 0:  # At default, this is every ~20.83ms
+            # print("--4ms--")
             # reset delay register
             delay_register.fill(0)
 
             # This part is likely to be the one to get modified for swarm control messaging. WP iterator increases here
-            connections = swarm.find_ultimate_links(swarm.get_head())  # find connections in dictionary starting from head
+            connections = swarm.find_ultimate_links(
+                swarm.get_head())  # find connections in dictionary starting from head
             # Check connectivity status
             for node in connections:  # find connection distance and delay for indexed node
-                print(node)
+                # print(node)
                 last_item = swarm.get_head()
                 for path_item in connections[node]:
                     if path_item != swarm.get_head():
                         drone1 = last_item
                         drone2 = path_item
-                        print("    ", drone1, "->", drone2)
+                        # print("    ", drone1, "->", drone2)
                         pos1 = env.pos[drone1]
                         pos2 = env.pos[drone2]
                         side_x = pos1[0] - pos2[0]
                         side_y = pos1[1] - pos2[1]
                         side_z = pos1[2] - pos2[2]
-                        distance = np.sqrt(side_x**2 + side_y**2 + side_z**2)
-                        print("    Distance between drone ", drone1, " and drone ", drone2, ": ", distance)
+                        distance = np.sqrt(side_x ** 2 + side_y ** 2 + side_z ** 2)
+                        # print("    Distance between drone ", drone1, " and drone ", drone2, ": ", distance)
+                        if not Utils.check_connected(distance, L_s=gaussian_roll(3.0, 1.0),
+                                                     L_misc=gaussian_roll(1.0, 0.5)):
+                            # Link broken, remove edge
+                            print("---LINK BROKEN--- Drone ", drone1, " and ", drone2, " disconnected")
+                            swarm.delete_edge(drone1, drone2)
                         found_delay = Utils.find_delay(distance, processing=Utils.gaussian_roll(0.025, 0.01))
                         # add and record delays
-                        delay_register[node] = delay_register[node]+found_delay
+                        delay_register[node] = delay_register[node] + found_delay
                     last_item = path_item
-            print(delay_register)
-            #TODO: Apply delays to the wp_counters
+            # print(delay_register)
 
+            # find time between each step (i iteration)
+            step_time = 1 / env.SIM_FREQ
 
+            for j in range(len(delay_register)):  # for each drone
+                wp_counters[j] = wp_counters[0]  # bring time in line with head
+                # divide each delay by the time between each step
+                step_setback = delay_register[j] / step_time
+                setback = math.ceil(step_setback)
+                # set every wp behind the head by this amount
+                wp_counters[j] -= setback
+                if wp_counters[j] < 0:
+                    wp_counters[j] = 0  # prevent index error
 
             # for j in range(ARGS.num_drones):  # for each drone
             #     # find its neighbours
@@ -215,34 +233,29 @@ if __name__ == "__main__":
             #             # Insert into table (numdrones x numdrones with link delays in each cell)
             #             # Change find ultimate links so it makes a tuple of all nodes it visits in order
 
-
-
             # get the connectivity table indicating how far away everything is from each other
 
-                # Ping every drone, print how long it took for last drone to receive
+            # Ping every drone, print how long it took for last drone to receive
             # print(connections)
             # Change so that the CH receives the first command, then in order across the swarm the rest
             # Head no delay
             # for j in connections: # each element in check_array
             #     drone_delay = connections[j]  # multiplied by
 
-
-            # next one needs delay calcd
-            # receive and follow. Need a bit to dynamically find delay for each drone as well.
-            
             #### Compute control for the current way point #############
-            for j in range(ARGS.num_drones):  # for each drone, give them a command to follow
+            for j in range(ARGS.num_drones):  # for each drone, give them an action to follow
                 action[str(j)], _, _ = ctrl[j].computeControlFromState(
                     control_timestep=CTRL_EVERY_N_STEPS * env.TIMESTEP,
                     state=obs[str(j)]["state"],
-                    target_pos=np.hstack([INIT_XYZS[j, 0], INIT_XYZS[j, 1], TARGET_POS[wp_counters[j], 2]])  #H+j*H_STEP
-                    )  # individually assigned movements to each drone
+                    target_pos=np.hstack([INIT_XYZS[j, 0], INIT_XYZS[j, 1], TARGET_POS[wp_counters[j], 2]])
+                    # H+j*H_STEP
+                )  # individually assigned movements to each drone
                 # Should be noted that this section should not just be TARGET_POS, else drones will certainly collide.
 
             #### Go to the next way point and loop #####################
-            for j in range(ARGS.num_drones):  #for each drone
-                wp_counters[j] = wp_counters[j] + 1 if wp_counters[j] < (
-                            NUM_WP - 1) else 0  #increment the counter tracker
+            for j in range(ARGS.num_drones):  # for each drone
+                wp_counters[j] = wp_counters[j] + 1 if wp_counters[j] < (NUM_WP - 1) else 0
+                # increment the counter tracker, wrapping around if it's gone beyond
 
         #### Log the simulation ####################################
         for j in range(ARGS.num_drones):  #for each drone
@@ -269,6 +282,7 @@ if __name__ == "__main__":
 
     #### Close the environment #################################
     env.close()
+    swarm.print_graph()
 
     #### Save the simulation results ###########################
     logger.save()

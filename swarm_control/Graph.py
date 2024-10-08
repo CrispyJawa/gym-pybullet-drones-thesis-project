@@ -83,6 +83,16 @@ class Graph:
                 break
         return found_neighbour
 
+    # Check to see if the drone has links, and return which ones they are
+    def has_links(self, droneID1):
+        links_avail = np.zeros(self.SIZE)
+        for i in self.SIZE:
+            if i != droneID1:  # for each other drone...
+                if (self.find_neighbour(droneID1, i)): #
+                    links_avail[i] = 1
+
+
+
     # def find_ultimate_links(self, node, check_array, depth=0):
     #     # # check_array = np.zeros(self.SIZE)  # Create this array of each node. 0 if disconnected, 1 if connected.
     #     # # Verify connecting line to a node exists, recursive function
