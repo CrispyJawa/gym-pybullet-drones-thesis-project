@@ -83,13 +83,18 @@ class Graph:
                 break
         return found_neighbour
 
-    # Check to see if the drone has links, and return which ones they are
+    # Check to see if the drone has any links (ie is it connected)
     def has_links(self, droneID1):
-        links_avail = np.zeros(self.SIZE)
-        for i in self.SIZE:
+        # links_avail = np.zeros(self.SIZE)
+        link_check = False
+        for i in range(self.SIZE):
             if i != droneID1:  # for each other drone...
-                if (self.find_neighbour(droneID1, i)): #
-                    links_avail[i] = 1
+                if self.find_neighbour(droneID1, i):  # ...see if indexed drone is a neighbour
+                    # links_avail[i] = 1
+                    link_check = True
+                    break
+        return link_check
+
 
 
 
@@ -153,6 +158,17 @@ class Graph:
 
         return paths
 
+
+    def linked_to_head(self, droneID1):
+        qLinked = False
+        ultimate_links = self.find_ultimate_links(self.get_head())
+        if droneID1 in ultimate_links:
+            qLinked = True
+        return qLinked
+
+
+
+
     def get_head(self):
         return self.HEAD
 
@@ -161,7 +177,7 @@ class Graph:
 
 
 if __name__ == '__main__':
-    edges = (0, 2), (0, 7), (0, 8), (1, 2), (1, 3), (2, 4), (2, 7), (3, 5), (3, 6), (3, 8), (4, 5), (5, 6), (6, 8)
+    edges = (0, 2), (0, 7), (0, 8), (1, 2), (1, 3), (2, 4), (2, 7), (3, 6), (3, 8), (6, 8)
     #(0, 1), (1, 2), (0, 3), (0, 7), (1, 6), (2, 5), (3, 4), (4, 5) #(0, 1), (1, 2), (2, 3)
     print("Graph")
     g = Graph(edges, 9, 0)
@@ -180,6 +196,8 @@ if __name__ == '__main__':
     g.delete_edge(1, 2)
     g.delete_edge(0, 2)
     paths_taken = g.find_ultimate_links(g.get_head())
+    print("Is 5 here? ", g.linked_to_head(5))
+    print("Is 7 here? ", g.linked_to_head(7))
     print("check array again", paths_taken)
     print("Length of path to node 2: ", len(paths_taken[2]))  # use len and indexed node to find "depth"
     for node in paths_taken:

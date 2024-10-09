@@ -17,6 +17,10 @@ def mw_to_dbm(mw: float):
     return 10.0 * np.log10(mw)
 
 
+def pythag_3D(a: float, b: float, c: float):
+    return np.sqrt(a**2 + b**2 + c**2)
+
+
 # Free space path loss calculation
 def calc_fspl(distance: float, frequency: float):
     return 20 * np.log10(distance) + 20 * np.log10(frequency) - 147.55
