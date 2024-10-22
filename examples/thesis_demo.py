@@ -49,9 +49,10 @@ def parse_tuples(tuple_str):
     except ValueError:
         return tuple(Utils.optimal_topology_pattern(INIT_XYZS))
 
+
 def make_folder(path, foldername):
     try:
-        os.mkdir(path+foldername)
+        os.mkdir(path + foldername)
         print(f"Directory '{foldername}' created successfully.")
     except FileExistsError:
         print(f"Directory '{foldername}' already exists.")
@@ -70,7 +71,7 @@ if __name__ == "__main__":
                         choices=DroneModel)
     parser.add_argument('--num_drones', default=8, type=int, help='Number of drones (default: 3)', metavar='')
     parser.add_argument('--physics', default="pyb", type=Physics, help='Physics updates (default: PYB)',
-                        metavar='',choices=Physics)
+                        metavar='', choices=Physics)
     parser.add_argument('--vision', default=False, type=str2bool, help='Whether to use VisionAviary (default: False)',
                         metavar='')
     parser.add_argument('--gui', default=True, type=str2bool, help='Whether to use PyBullet GUI (default: True)',
@@ -87,7 +88,7 @@ if __name__ == "__main__":
                         help='Whether to add obstacles to the environment (default: True)', metavar='')
     parser.add_argument('--simulation_freq_hz', default=240, type=int,
                         help='Simulation frequency in Hz (default: 240)', metavar='')
-                        # Control frequency: affects number of waypoints, frequency of motion updates
+    # Control frequency: affects number of waypoints, frequency of motion updates
     parser.add_argument('--control_freq_hz', default=48, type=int,
                         help='Control frequency in Hz (default: 48)', metavar='')
     parser.add_argument('--duration_sec', default=10, type=int,
@@ -101,11 +102,11 @@ if __name__ == "__main__":
                         help='Initial height of all drones')
     parser.add_argument('--range_goal', default=50.0, type=float,
                         help='How far the drones will fly at the specified rate')
-    parser.add_argument('--drone_spacing',default=2.0, type=float,
+    parser.add_argument('--drone_spacing', default=5.0, type=float,
                         help='Distance between each drone in swarm setup')
     parser.add_argument('--swarm_topology', default="((0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7))",
                         help='A list of all connections between drones, in tuple form')
-                        # (0, 1), (1, 2), (0, 3), (0, 7), (1, 6), (2, 5), (3, 4), (4, 5)
+    # (0, 1), (1, 2), (0, 3), (0, 7), (1, 6), (2, 5), (3, 4), (4, 5)
     parser.add_argument('--swarm_head', default=0, type=int,
                         help='Which drone in the swarm shall receive communications and transmit to the rest')
     # Losses and delays
@@ -120,6 +121,8 @@ if __name__ == "__main__":
                         help='Number of simulation iterations')
     parser.add_argument('--simulation_title', default='default', type=str,
                         help='Title of csv files outputted at end')
+    parser.add_argument('--output_data', default=True, type=str2bool,
+                        help='Whether to save delay and position results (default: True)', metavar='')
 
     ARGS = parser.parse_args()
     filepath = "C:\\Users\\Signature Edition\\Documents\\PyGymDrones\\gym-pybullet-drones-0.5.2\\files\\outputs\\"
@@ -133,10 +136,11 @@ if __name__ == "__main__":
 
     flight_vector = np.array(ARGS.swarm_direction, dtype=float)
     for i in range(len(flight_vector)):
-        flight_vector[i] = flight_vector[i]*R_STEP
+        flight_vector[i] = flight_vector[i] * R_STEP
 
     # Initialised positions based on number of drones
-    INIT_XYZS = np.array([[R * (i % 4), R * (i // 4), H] for i in range(ARGS.num_drones)]) #sets drones in a rectangular pattern
+    INIT_XYZS = np.array(
+        [[R * (i % 4), R * (i // 4), H] for i in range(ARGS.num_drones)])  #sets drones in a rectangular pattern
     # np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), R*np.sin((i/6)*2*np.pi+np.pi/2), H] for i in range(ARGS.num_drones)]) #sets drones in a circle
     current_pos = INIT_XYZS
 
@@ -144,6 +148,7 @@ if __name__ == "__main__":
     AGGR_PHY_STEPS = int(ARGS.simulation_freq_hz / ARGS.control_freq_hz) if ARGS.aggregate else 1  # default 1
 
     for sim_iter in range(ARGS.simulation_iterations):
+        print("SIMULATION ITERATION: " + str(sim_iter))
         #### Create the environment with or without video capture ## Create sim window here
         if ARGS.vision:
             env = VisionAviary(drone_model=ARGS.drone,
@@ -188,10 +193,10 @@ if __name__ == "__main__":
                                     movement_step[1],
                                     movement_step[2])
             else:
-                TARGET_POS[i, :] = TARGET_POS[i-1, :]  # Fix to R_GOAL that has the drones stop here
+                TARGET_POS[i, :] = TARGET_POS[i - 1, :]  # Fix to R_GOAL that has the drones stop here
         wp_counters = np.array([0 for i in range(ARGS.num_drones)])  # value for each drone indicating pos flight paths
-        print("WP Counters: ", wp_counters)
-        print("Target POS: ", TARGET_POS.shape)
+        # print("WP Counters: ", wp_counters)
+        # print("Target POS: ", TARGET_POS.shape)
 
         #### Initialize the logger #################################
         logger = Logger(logging_freq_hz=int(ARGS.simulation_freq_hz / AGGR_PHY_STEPS),
@@ -204,7 +209,7 @@ if __name__ == "__main__":
         head = ARGS.swarm_head
         swarm = g.Graph(edges, ARGS.num_drones, head)
         delay_register = np.zeros(swarm.get_size(), float)
-        swarm.print_graph()
+        # swarm.print_graph()
 
         #### Initialize the controllers ############################
         ctrl = [DSLPIDControl(env) for i in range(ARGS.num_drones)]
@@ -235,13 +240,12 @@ if __name__ == "__main__":
             if i % CTRL_EVERY_N_STEPS == 0:  # At default, this is every ~20.83ms
                 # print("--4ms--")
 
-
                 #### Compute control for the current way point #############
                 for j in range(ARGS.num_drones):  # for each drone, give them an action to follow
                     action[str(j)], _, _ = ctrl[j].computeControlFromState(
                         control_timestep=CTRL_EVERY_N_STEPS * env.TIMESTEP,
                         state=obs[str(j)]["state"],
-                        target_pos=np.hstack(INIT_XYZS[j]+TARGET_POS[wp_counters[j]])
+                        target_pos=np.hstack(INIT_XYZS[j] + TARGET_POS[wp_counters[j]])
                         # target_pos=np.hstack([INIT_XYZS[j, 0], INIT_XYZS[j, 1], TARGET_POS[wp_counters[j], 2]])
                         # H+j*H_STEP
                     )  # individually assigned movements to each drone
@@ -264,6 +268,7 @@ if __name__ == "__main__":
             #### Printout ##############################################
             if i % env.SIM_FREQ == 0:
                 env.render()
+                print("SIMULATION ITERATOR: ",sim_iter)
 
                 #CALCULATING SWARM DELAY
                 # reset delay register
@@ -289,12 +294,16 @@ if __name__ == "__main__":
                             distance = Utils.pythag_3D(side_x, side_y, side_z)
                             # print("    Distance between drone ", drone1, " and drone ", drone2, ": ", distance)
                             # Verify connection status
-                            if not Utils.check_connected(distance, L_s=gaussian_roll(ARGS.system_losses[0], ARGS.system_losses[1]),
-                                                         L_misc=gaussian_roll(ARGS.miscellaneous_losses[0], ARGS.miscellaneous_losses[1])):
+                            if not Utils.check_connected(distance, L_s=gaussian_roll(ARGS.system_losses[0],
+                                                                                     ARGS.system_losses[1]),
+                                                         L_misc=gaussian_roll(ARGS.miscellaneous_losses[0],
+                                                                              ARGS.miscellaneous_losses[1])):
                                 # Link broken, remove edge
                                 print("---LINK BROKEN--- Drone ", drone1, " and ", drone2, " disconnected")
                                 swarm.delete_edge(drone1, drone2)
-                            found_delay = Utils.find_delay(distance, processing=Utils.gaussian_roll(ARGS.processing_delays[0], ARGS.processing_delays[1]))
+                            found_delay = Utils.find_delay(distance,
+                                                           processing=Utils.gaussian_roll(ARGS.processing_delays[0],
+                                                                                          ARGS.processing_delays[1]))
                             # add and record delays
                             # if delay_register[node] < found_delay:
                             delay_register[node] = delay_register[node] + found_delay
@@ -310,13 +319,13 @@ if __name__ == "__main__":
                         # divide each delay by the time between each step
                         step_setback = delay_register[j] / step_time
                         setback = math.ceil(step_setback)
-                        print("Setback for drone ", j, " is ", setback)
+                        # print("Setback for drone ", j, " is ", setback)
                         wp_counters[j] -= setback
                         if wp_counters[j] < 0:
                             wp_counters[j] = 0  # prevent index error
 
                 #### Save current results #
-                curr_time = math.floor(i/env.SIM_FREQ)
+                curr_time = math.floor(i / env.SIM_FREQ)
                 for j in range(ARGS.num_drones):
                     position_results[j][curr_time] = env.pos[j]
                     delay_results[j][curr_time] = delay_register[j]
@@ -335,14 +344,14 @@ if __name__ == "__main__":
 
         #### Close the environment #################################
         env.close()
-        swarm.print_graph()
-        print(swarm.find_ultimate_links(swarm.get_head()))
+        # swarm.print_graph()
+        # print(swarm.find_ultimate_links(swarm.get_head()))
 
         #### Save the simulation results ###########################
         logger.save()
-        # Additional calculations
 
-        error_pos = np.zeros((swarm.get_size()*PERIOD, 3))
+        # Additional calculations
+        error_pos = np.zeros((swarm.get_size() * PERIOD, 3))  # percentage error
         # Find positional error (where it should be if there was zero delay)
         # abs(curr_pos - (Init_xyzs + Mvmntvector*time step))
         for j in range(ARGS.num_drones):
@@ -350,26 +359,39 @@ if __name__ == "__main__":
                 indexed_pos = position_results[j][t]
                 initial_pos = INIT_XYZS[j]
                 indexed_time = flight_vector * (t * ARGS.control_freq_hz)
-                error_pos[j*PERIOD + t] = np.abs(indexed_pos - (initial_pos + indexed_time))
+                percent_error = 100 * ((np.abs(indexed_pos - (initial_pos + indexed_time))) /
+                                                   (initial_pos + indexed_time))
+                percent_error[np.isnan(percent_error)] = 0.0  # Check for NaN values
+                error_pos[j * PERIOD + t] = percent_error
 
-        # Save arrays into a CSV in corresponding directories
-        delayDataFPath = ARGS.simulation_title+"DelayData_s"+str(ARGS.movement_rate)
-        posDataFPath = ARGS.simulation_title + "PosData_s" + str(ARGS.movement_rate)
-        posErrorFPath = ARGS.simulation_title + "PosError_s" + str(ARGS.movement_rate)
+        if ARGS.output_data:
+            # Save arrays into a CSV in corresponding directories
+            delayDataFPath = ARGS.simulation_title + "DelayData_s" + str(ARGS.movement_rate)
+            posDataFPath = ARGS.simulation_title + "PosData_s" + str(ARGS.movement_rate)
+            posErrorFPath = ARGS.simulation_title + "PosError_s" + str(ARGS.movement_rate)
 
-        make_folder(filepath, delayDataFPath)
-        make_folder(filepath, posDataFPath)
-        make_folder(filepath, posErrorFPath)
+            # Ensure folders are created
+            make_folder(filepath, delayDataFPath)
+            make_folder(filepath + delayDataFPath+"\\", "S" + str(ARGS.movement_rate) + "_R" + str(ARGS.drone_spacing))
+            make_folder(filepath, posDataFPath)
+            make_folder(filepath + posDataFPath+"\\", "S" + str(ARGS.movement_rate) + "_R" + str(ARGS.drone_spacing))
+            make_folder(filepath, posErrorFPath)
+            make_folder(filepath + posErrorFPath+"\\", "S" + str(ARGS.movement_rate) + "_R" + str(ARGS.drone_spacing))
 
-        output_pos = position_results.reshape((position_results.shape[0]*position_results.shape[1],
-                                               position_results.shape[2]))
+            #Reshape output
+            output_pos = position_results.reshape((position_results.shape[0] * position_results.shape[1],
+                                                   position_results.shape[2]))
 
-        np.savetxt(filepath+delayDataFPath+"\\"+ARGS.simulation_title+"_Delay_Data_"+str(sim_iter)+"_s"+str(ARGS.movement_rate)+".csv",
-                   delay_results, delimiter=",")
-        np.savetxt(filepath+posDataFPath+"\\"+ARGS.simulation_title+"_Pos_Data_"+str(sim_iter)+"_s"+str(ARGS.movement_rate)+".csv",
-                   output_pos, delimiter=",")
-        np.savetxt(filepath+posErrorFPath+"\\"+ARGS.simulation_title+"_Pos_error_"+str(sim_iter)+"_s"+str(ARGS.movement_rate)+".csv",
-                   error_pos, delimiter=",")
+            # Save CSV
+            np.savetxt(filepath + delayDataFPath + "\\" + "S" + str(ARGS.movement_rate) + "_R" +
+                       str(ARGS.drone_spacing) + "\\" + ARGS.simulation_title + "_Delay_Data_" + str(sim_iter) + "_s" +
+                       str(ARGS.movement_rate) + "_r" + str(ARGS.drone_spacing) + ".csv", delay_results, delimiter=",")
+            np.savetxt(filepath + posDataFPath + "\\" + "S" + str(ARGS.movement_rate) + "_R" + str(ARGS.drone_spacing)
+                       + "\\" + ARGS.simulation_title + "_Pos_Data_" + str(sim_iter) + "_s"
+                       + str(ARGS.movement_rate) + "_r" + str(ARGS.drone_spacing) + ".csv", output_pos, delimiter=",")
+            np.savetxt(filepath + posErrorFPath + "\\" + "S" + str(ARGS.movement_rate) + "_R" +
+                       str(ARGS.drone_spacing) + "\\" + ARGS.simulation_title + "_Pos_error_" + str(sim_iter) + "_s" +
+                       str(ARGS.movement_rate) + "_r" + str(ARGS.drone_spacing) + ".csv", error_pos, delimiter=",")
 
         #### Plot the simulation results ###########################
         if ARGS.plot:
