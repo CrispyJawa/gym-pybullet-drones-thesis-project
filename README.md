@@ -1,6 +1,6 @@
 # Investigation into Control of Swarm Drones
 
-This code is largely similar to gym-pybullet-drones (https://github.com/utiasDSL/gym-pybullet-drones/tree/main), as much of the work is derived from there. Please refer to the documentation there for a better understanding of how the system operates
+This code uses gym-pybullet-drones (https://github.com/utiasDSL/gym-pybullet-drones/tree/main). Please refer to the documentation there for a better understanding of how the code operates
 
 # Key files/folders
 
