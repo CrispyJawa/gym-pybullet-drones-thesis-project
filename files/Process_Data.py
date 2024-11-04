@@ -83,10 +83,10 @@ def load_and_average_delays(file_paths):
             raise ValueError(f"CSV file {file} does not have 8 rows and 10 columns. It has {df.shape}.")
 
         # Calculate the average across the columns for each row (node)
-        node_averages = df.mean(axis=1)  # Averages across the 10 columns (time steps)
-
-        # Accumulate the node averages across files
-        node_averages_sum += node_averages
+        # node_averages = df.mean(axis=1)  # Averages across the 10 columns (time steps)
+        final_delays = df[:][9]
+        # Accumulate the node averages across CSVs for all 8 drones
+        node_averages_sum += final_delays
 
     # Calculate the final average by dividing the sum by the number of files
     overall_average = node_averages_sum / len(file_paths)
@@ -103,38 +103,40 @@ if __name__ == "__main__":
 
     # Positional display
     for topology in topologies:
-        fig = plt.figure(figsize=(len(ranges)*6, len(speeds)*4))
-        fig.tight_layout()
+        fig, axes = plt.subplots(len(speeds), len(ranges), figsize=(len(ranges) * 6, len(speeds) * 4),
+                                 subplot_kw={'projection': '3d'})
         plot_idx = 0
-        for speed in speeds:
-            for distance in ranges:
+        for speed in range(len(speeds)):
+            for distance in range(len(ranges)):
                 plot_idx += 1
                 # Skim through all PosData files
                 csv_files = glob.glob(
                     'C:\\Users\\Signature Edition\\Documents\\PyGymDrones\\gym-pybullet-drones-0.5.2\\files'
-                    '\\outputs\\' + topology + '_Diagonal_flightPosData_s' + str(speed) + '\\S' +
-                    str(speed) + '_R' + str(distance) + '\\*Pos_Data*.csv')
+                    '\\outputs\\' + topology + '_Diagonal_flightPosData_s' + str(speeds[speed]) + '\\S' +
+                    str(speeds[speed]) + '_R' + str(ranges[distance]) + '\\*Pos_Data*.csv')
 
                 if len(csv_files) == 0:
                     print('No csv files found.')
                 else:
                     avg_positions = load_and_average_positions(csv_files)  # sum all values, then divide
                     # print(avg_positions)
-                ax = fig.add_subplot(len(speeds), len(ranges), int(plot_idx), projection='3d')
 
                 for drone in range(8):
                     x = avg_positions[drone, :, 0]
                     y = avg_positions[drone, :, 1]
                     z = avg_positions[drone, :, 2]
 
-                    ax.scatter(x, y, z, c=colours[drone], marker='o')
-                plt.suptitle("Avg XYZ Positions of Swarm in a " + topology + " configuration, for 10 seconds")
-                ax.title.set_text("Speed: " + str(speed) + "    Distance between Drones: " + str(distance))
-                ax.set_xlabel('X')
-                ax.set_ylabel('Y')
-                ax.set_zlabel('Z')
+                    axes[speed, distance].plot3D(x, y, z, c=colours[drone], marker='o')
+                axes[speed, distance].set_title("Positions    Speed: " + str(speeds[speed]) + "    Range: " + str(ranges[distance]),
+                    fontdict={'fontsize': 14, 'fontweight': 'bold'})
+                # axes[speed, distance].title.set_text(
+                #     "Speed: " + str(speeds[speed]) + "    Distance between Drones: " + str(ranges[distance]),
+                #     fontdict={'fontsize': 16, 'fontweight': 'bold'})
+                axes[speed, distance].set_xlabel('X (m from origin)', fontweight='bold')
+                axes[speed, distance].set_ylabel('Y (m from origin)', fontweight='bold')
+                axes[speed, distance].set_zlabel('Z (m from origin)', fontweight='bold')
         if True:
-            plt.subplots_adjust(hspace=0.3)
+            plt.subplots_adjust(left=0.07, right=0.93, top=0.98, bottom=0.03, wspace=0.2, hspace=0.3)
             plt.savefig(
                 "C:\\Users\\Signature Edition\\Documents\\PyGymDrones\\gym-pybullet-drones-0.5.2\\files\\outputs\\AAA_Images\\AVG_XYZ_" + topology + ".png")
             plt.show()
@@ -144,8 +146,6 @@ if __name__ == "__main__":
     for topology in topologies:
         plot_idx = 0
         fig = plt.figure(figsize=(len(ranges)*8, len(speeds)*4))
-        fig.tight_layout()
-        plt.suptitle("Average positional error for " + topology + " topology")
         for speed in speeds:
             for distance in ranges:
                 plot_idx += 1
@@ -176,23 +176,21 @@ if __name__ == "__main__":
                     max_index = np.argmax(avg_error)
 
                     # Annotate the highest bar with its value
-                    plt.text(float(max_index), max_value + 1, f'{max_value}', ha='center', va='bottom', fontsize=12,
-                             color='black')
+                    ax.text(float(max_index), max_value - 0.01, f'{max_value:.8f}', ha='center', va='bottom', fontsize=12,
+                             color='white',
+                            bbox=dict(facecolor='black', alpha=0.8, boxstyle='round,pad=0.3'))
 
-                    ax.set_title("Messaging delays from cluster to head Speed: " + str(speed) + " Range: " + str(distance))
-                    ax.set_xlabel("Drone")
-                    ax.set_ylabel("Average Delay")
-        plt.subplots_adjust(hspace=0.3)
+                    ax.set_title("Messaging delays    Speed: " + str(speed) + " Range: " + str(distance), fontdict={'fontsize': 14, 'fontweight': 'bold'})
+                    ax.set_xlabel("Drone ID", fontweight='bold')
+                    ax.set_ylabel("Average Delay (s)", fontweight='bold')
+        plt.subplots_adjust(left=0.1, right=0.9, top=0.94, bottom=0.05, wspace=0.2, hspace=0.3)
         plt.savefig("C:\\Users\\Signature Edition\\Documents\\PyGymDrones\\gym-pybullet-drones-0.5.2\\files\\outputs\\AAA_Images\\DELAY_XYZ_" + topology + ".png")
         plt.show()
 
     # Positional error
-    # Per topology
     for topology in topologies:
         plot_idx = 0
         fig = plt.figure(figsize=(len(ranges)*8, len(speeds)*4))
-        fig.tight_layout()
-        plt.suptitle("Average positional error for " + topology + " topology")
         for speed in speeds:
             for distance in ranges:
                 plot_idx += 1
@@ -218,9 +216,10 @@ if __name__ == "__main__":
                     ax.set_xticks(np.arange(0,8,1))
 
                     ax.set_title(
-                        "Positioning errors     Speed: " + str(speed) + " Range: " + str(distance))
-                    ax.set_xlabel("Drone")
-                    ax.set_ylabel("Average Error (%)")
-        plt.subplots_adjust(hspace=0.3)
+                        "Positioning errors    Speed: " + str(speed) + "   Range: " + str(distance), fontdict={'fontsize': 14, 'fontweight': 'bold'})
+                    ax.set_xlabel("Drone ID", fontweight='bold')
+                    ax.set_ylabel("Average Error (%)", fontweight='bold')
+                    ax.set_ylim(0, 25)
+        plt.subplots_adjust(left=0.1, right=0.9, top=0.94, bottom=0.05, wspace=0.2, hspace=0.3)
         plt.savefig("C:\\Users\\Signature Edition\\Documents\\PyGymDrones\\gym-pybullet-drones-0.5.2\\files\\outputs\\AAA_Images\\ERR_XYZ_" + topology + ".png")
         plt.show()

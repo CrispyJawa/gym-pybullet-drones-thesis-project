@@ -110,9 +110,9 @@ if __name__ == "__main__":
     parser.add_argument('--swarm_head', default=0, type=int,
                         help='Which drone in the swarm shall receive communications and transmit to the rest')
     # Losses and delays
-    parser.add_argument('--system_losses', default=(2.0, 1.0), type=float,
+    parser.add_argument('--system_losses', default=(3.0, 0.7), type=float,
                         help='The mean and S.D. of system losses in communications as a tuple')
-    parser.add_argument('--miscellaneous_losses', default=(1.0, 0.5), type=float,
+    parser.add_argument('--miscellaneous_losses', default=(1.0, 0.1), type=float,
                         help='The mean and S.D. of any other losses in communications as a tuple')
     parser.add_argument('--processing_delays', default=(0.025, 0.001), type=float,
                         help='The mean and S.D. of any processing delays between sending messages as a tuple')
@@ -219,6 +219,7 @@ if __name__ == "__main__":
         #### Run the simulation ####################################
         position_results = np.zeros((swarm.get_size(), PERIOD, 3))  # swarm size x time x 3 array for tracking positions
         delay_results = np.zeros((swarm.get_size(), PERIOD))  #smaller array for tracking delays
+        # link_quality_results =
         for i in range(ARGS.num_drones):
             position_results[i][0] = env.pos[i]  # Starting Position
             delay_results[i][0] = delay_register[i]
@@ -314,7 +315,7 @@ if __name__ == "__main__":
                 step_time = 1 / env.SIM_FREQ
 
                 for j in range(len(delay_register)):  # for each drone
-                    if swarm.linked_to_head(j):
+                    if swarm.linked_to_head(j):  #check if connected to head
                         wp_counters[j] = wp_counters[0]  # bring time in line with head
                         # divide each delay by the time between each step
                         step_setback = delay_register[j] / step_time
